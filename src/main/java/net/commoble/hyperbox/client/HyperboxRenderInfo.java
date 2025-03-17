@@ -1,5 +1,8 @@
 package net.commoble.hyperbox.client;
 
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.DimensionSpecialEffects;
 import net.minecraft.world.phys.Vec3;
 
@@ -13,7 +16,7 @@ public class HyperboxRenderInfo extends DimensionSpecialEffects
 		// fog type -- overworld has NORMAL, nether has NONE, end has END
 		// force bright lightmap -- affects *color* of lighting -- only true for end
 		// constant ambient light -- makes bottom of blocks appear brighter, tops appear dimmer -- only true for nether
-        super(Float.NaN, true, SkyType.NORMAL, true, true);
+        super(128.0f, true, SkyType.NORMAL, true, false);
 	}
 
 	// get brightness dependent fog color
@@ -21,14 +24,25 @@ public class HyperboxRenderInfo extends DimensionSpecialEffects
 	@Override
 	public Vec3 getBrightnessDependentFogColor(Vec3 colorIn, float brightness)
 	{
-		return colorIn;
+
+		return new Vec3(
+				colorIn.x() * brightness,
+				colorIn.y() * brightness,
+				colorIn.z() * brightness
+		);
 	}
 
 	// is foggy -- only nether returns true
 	@Override
 	public boolean isFoggyAt(int x, int z)
 	{
-		return true;
+		return false;
+	}
+
+	public boolean renderSky(int ticks, float partialTick, PoseStack poseStack, ClientLevel level, Minecraft minecraft)
+	{
+		// Return false to use default sky rendering with sun/moon
+		return false;
 	}
 
 }
