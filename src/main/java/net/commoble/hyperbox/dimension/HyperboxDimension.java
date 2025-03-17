@@ -51,7 +51,7 @@ public class HyperboxDimension
 	 * 
 	 * @param server a MinecraftServer
 	 * @param targetWorld The world we want to know is reachable from startWorld
-	 * @param startWorld The world we are starting our search from
+	 * @param hyperboxWorld The world we are starting our search from
 	 * @return A result including the target world's hyperbox position and the parenting distance between the two worlds, or -1 if the target is not reachable.
 	 * The result's position will be null if the iteration depth is not positive.
 	 */
@@ -103,7 +103,6 @@ public class HyperboxDimension
 	 * (otherwise non-latin keyboards can't make hyperboxes at all).
 	 * @param player
 	 * @param displayName
-	 * @return
 	 */
 	public static ResourceLocation generateId(Player player, String displayName)
 	{

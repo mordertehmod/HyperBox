@@ -22,25 +22,13 @@ public class HyperboxRegionFileStorage extends RegionFileStorage
 	@Override
 	protected void write(ChunkPos pos, CompoundTag compound) throws IOException
 	{
-		if (pos.equals(HyperboxChunkGenerator.CHUNKPOS))
-		{
-			super.write(pos, compound);
-		}
+		super.write(pos, compound);
 	}
 
 	@Override
 	@Nullable
 	public CompoundTag read(ChunkPos pos) throws IOException
 	{
-		if (pos.equals(HyperboxChunkGenerator.CHUNKPOS))
-		{
-			return super.read(pos);
-		}
-		else
-		{
-			return null;
-		}
+		return super.read(pos);
 	}
-
-	
 }

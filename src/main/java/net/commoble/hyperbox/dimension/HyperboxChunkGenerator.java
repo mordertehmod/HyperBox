@@ -41,10 +41,10 @@ public class HyperboxChunkGenerator extends ChunkGenerator
 	public static final ChunkPos CHUNKPOS = new ChunkPos(0,0);
 	public static final long CHUNKID = CHUNKPOS.toLong();
 	public static final BlockPos CORNER = CHUNKPOS.getWorldPosition();
-	public static final BlockPos CENTER = CORNER.offset(7, 7, 7);
-	public static final BlockPos MIN_SPAWN_CORNER = HyperboxChunkGenerator.CORNER.offset(1,1,1);
+	public static final BlockPos CENTER = CORNER.offset(79, 79, 79);
+	public static final BlockPos MIN_SPAWN_CORNER = HyperboxChunkGenerator.CORNER.offset(80,80,80);
 	// don't want to spawn with head in the ceiling
-	public static final BlockPos MAX_SPAWN_CORNER = HyperboxChunkGenerator.CORNER.offset(13,12,13);
+	public static final BlockPos MAX_SPAWN_CORNER = HyperboxChunkGenerator.CORNER.offset(80,1,80);
 
 	private final Holder<Biome> biome; public Holder<Biome> biome() { return biome; }
 		
@@ -56,7 +56,7 @@ public class HyperboxChunkGenerator extends ChunkGenerator
 	}
 	
 	// hardcoding this for now, may reconsider later
-	public int getHeight() { return 15; }
+	public int getHeight() { return 127; }
 	
 	// create chunk generator at runtime when dynamic dimension is created
 	public HyperboxChunkGenerator(MinecraftServer server)
@@ -86,55 +86,56 @@ public class HyperboxChunkGenerator extends ChunkGenerator
 	}
 
 	@Override
-	public void buildSurface(WorldGenRegion worldGenRegion, StructureManager structureFeatureManager, RandomState random, ChunkAccess chunk)
-	{
-		// set wall blocks at the floor and ceiling and walls of the chunk
-		// ceiling y = height-1, so if height==16, ceiling==15
-		// we'll generate wall on xz from 0 to 14 rather than from 0 to 15 so sizes of walls are odd numbers
+	public void buildSurface(WorldGenRegion worldGenRegion, StructureManager structureFeatureManager, RandomState random, ChunkAccess chunk) {
+		ServerLevel serverLevel = worldGenRegion.getLevel();
+
 		ChunkPos chunkPos = chunk.getPos();
-		if (chunkPos.equals(CHUNKPOS))
-		{
+		int chunkX = chunkPos.x;
+		int chunkZ = chunkPos.z;
+
+		if (chunkX >= 0 && chunkX < 10 && chunkZ >= 0 && chunkZ < 10) {
 			BlockState wallState = Hyperbox.INSTANCE.hyperboxWall.get().defaultBlockState();
 			BlockPos.MutableBlockPos mutaPos = new BlockPos.MutableBlockPos();
-			mutaPos.set(CORNER);
-			int maxHorizontal = 14;
+
+			int startX = chunkX * 16; // World X position of this chunk
+			int startZ = chunkZ * 16; // World Z position of this chunk
+			int endX = startX + 17;
+			int endZ = startZ + 17;
+
+			int maxHorizontal = 160;  // Box size
 			int ceilingY = this.getHeight() - 1;
-			for (int xOff=0; xOff<=maxHorizontal; xOff++)
-			{
-				int worldX = CORNER.getX() + xOff;
-				for (int zOff=0; zOff<=maxHorizontal; zOff++)
-				{
-					int worldZ = CORNER.getZ() + zOff;
-					if (xOff == 0 || xOff == maxHorizontal || zOff == 0 || zOff == maxHorizontal)
-					{
-						// generate wall
-						for (int y=1; y<ceilingY; y++)
-						{
-							mutaPos.set(worldX,y,worldZ);
+
+			for (int worldX = startX; worldX < endX; worldX++) {
+				for (int worldZ = startZ; worldZ < endZ; worldZ++) {
+					// Check if this block is within the walls
+					if (worldX == 0 || worldX == maxHorizontal - 1 || worldZ == 0 || worldZ == maxHorizontal - 1) {
+						for (int y = 1; y < ceilingY; y++) {
+							mutaPos.set(worldX, y, worldZ);
 							chunk.setBlockState(mutaPos, wallState, false);
 						}
 					}
-					// generate floor and ceiling
+					// Generate floor and ceiling
 					mutaPos.set(worldX, 0, worldZ);
 					chunk.setBlockState(mutaPos, wallState, false);
 					mutaPos.set(worldX, ceilingY, worldZ);
 					chunk.setBlockState(mutaPos, wallState, false);
 				}
 			}
-			
-			// set the apertures
+
 			BlockState aperture = Hyperbox.INSTANCE.apertureBlock.get().defaultBlockState();
 			Consumer<Direction> apertureSetter = dir -> chunk.setBlockState(mutaPos, aperture.setValue(ApertureBlock.FACING, dir), false);
+
 			int centerX = CENTER.getX();
 			int centerY = CENTER.getY();
 			int centerZ = CENTER.getZ();
+
 			int west = centerX - 7;
 			int east = centerX + 7;
 			int down = centerY - 7;
 			int up = centerY + 7;
 			int north = centerZ - 7;
 			int south = centerZ + 7;
-			
+
 			mutaPos.set(centerX,up,centerZ);
 			apertureSetter.accept(Direction.DOWN);
 			mutaPos.set(centerX,down,centerZ);
@@ -147,7 +148,6 @@ public class HyperboxChunkGenerator extends ChunkGenerator
 			apertureSetter.accept(Direction.WEST);
 			mutaPos.set(west,centerY,centerZ);
 			apertureSetter.accept(Direction.EAST);
-			
 		}
 	}
 	
@@ -160,7 +160,7 @@ public class HyperboxChunkGenerator extends ChunkGenerator
 	@Override
 	public int getGenDepth() // total number of available y-levels (between bottom and top)
 	{
-		return 16;
+		return 128;
 	}
 
 	@Override

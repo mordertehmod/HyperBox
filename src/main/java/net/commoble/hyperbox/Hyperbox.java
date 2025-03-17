@@ -33,12 +33,13 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.flag.FeatureFlags;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.block.Block;
@@ -46,6 +47,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.level.dimension.LevelStem;
@@ -104,7 +106,6 @@ public class Hyperbox
 		this.commonConfig = ConfigHelper.register(MODID, ModConfig.Type.COMMON, CommonConfig::new);
 		
 		// create and set up registrars
-		DeferredRegister<SoundEvent> soundEvents = defreg(modBus, Registries.SOUND_EVENT);
 		DeferredRegister<Block> blocks = defreg(modBus, Registries.BLOCK);
 		DeferredRegister<Item> items = defreg(modBus, Registries.ITEM);
 		DeferredRegister<BlockEntityType<?>> tileEntities = defreg(modBus, Registries.BLOCK_ENTITY_TYPE);
@@ -112,8 +113,6 @@ public class Hyperbox
 		DeferredRegister<MapCodec<? extends ChunkGenerator>> chunkGeneratorCodecs = defreg(modBus, Registries.CHUNK_GENERATOR);
 		DeferredRegister<AttachmentType<?>> attachmentTypes = defreg(modBus, NeoForgeRegistries.Keys.ATTACHMENT_TYPES);
 		DeferredRegister<DataComponentType<?>> dataComponentTypes = defreg(modBus, Registries.DATA_COMPONENT_TYPE);
-		
-		soundEvents.register("ambience", () -> SoundEvent.createVariableRangeEvent(id("ambience")));
 		
 		this.hyperboxBlock = blocks.register(Names.HYPERBOX, () -> new HyperboxBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.PURPUR_BLOCK).strength(2F, 1200F).isRedstoneConductor(HyperboxBlock::getIsNormalCube)));
 		this.hyperboxPreviewBlock = blocks.register(Names.HYPERBOX_PREVIEW, () -> new HyperboxBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.PURPUR_BLOCK).strength(2F, 1200F).isRedstoneConductor(HyperboxBlock::getIsNormalCube)));
@@ -123,8 +122,18 @@ public class Hyperbox
 		this.apertureBlock = blocks.register(Names.APERTURE, () -> new ApertureBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.BARRIER).mapColor(MapColor.NONE).lightLevel(state -> 6).isRedstoneConductor(HyperboxBlock::getIsNormalCube)));
 		this.apertureBlockEntityType = tileEntities.register(Names.APERTURE, () -> BlockEntityType.Builder.of(ApertureBlockEntity::create, this.apertureBlock.get()).build(null));
 		
-		this.hyperboxWall = blocks.register(Names.HYPERBOX_WALL, () -> new Block(BlockBehaviour.Properties.ofFullCopy(Blocks.BARRIER).mapColor(MapColor.NONE)));
-		
+		this.hyperboxWall = blocks.register(Names.HYPERBOX_WALL,
+				() -> new Block(BlockBehaviour.Properties
+						.ofFullCopy(Blocks.BARRIER)
+						.mapColor(MapColor.NONE)
+						.lightLevel((state) -> 15)) {
+					@Override
+					public boolean propagatesSkylightDown(BlockState state, BlockGetter world, BlockPos pos) {
+						return true;
+					}
+				}
+		);
+
 		this.hyperboxMenuType = menuTypes.register(Names.HYPERBOX, () -> new MenuType<HyperboxMenu>(HyperboxMenu::makeClientMenu, FeatureFlags.VANILLA_SET));
 		
 		this.hyperboxChunkGeneratorCodec = chunkGeneratorCodecs.register(Names.HYPERBOX, HyperboxChunkGenerator::makeCodec);
@@ -213,11 +222,21 @@ public class Hyperbox
 		
 		if (this.commonConfig.autoForceHyperboxChunks.get() && HyperboxDimension.getDimensionType(serverLevel.getServer()) == serverLevel.dimensionType())
 		{
+			int chunkRadius = 10;
+
 			boolean isChunkForced = serverLevel.getForcedChunks().contains(HyperboxChunkGenerator.CHUNKID);
 			boolean shouldChunkBeForced = shouldHyperboxChunkBeForced(serverLevel);
-			if (isChunkForced != shouldChunkBeForced)
-			{
-				serverLevel.setChunkForced(HyperboxChunkGenerator.CHUNKPOS.x, HyperboxChunkGenerator.CHUNKPOS.z, shouldChunkBeForced);
+
+			for(int chunkX = 0; chunkX < chunkRadius; chunkX++) {
+				for(int chunkZ = 0; chunkZ < chunkRadius; chunkZ++) {
+					ChunkPos pos = new ChunkPos(chunkX, chunkZ);
+
+					long chunkid = pos.toLong();
+
+					// if(isChunkForced != shouldChunkBeForced)
+
+					serverLevel.setChunkForced(pos.x, pos.z, true); // call shouldChunkBeForced
+				}
 			}
 		}
 	}

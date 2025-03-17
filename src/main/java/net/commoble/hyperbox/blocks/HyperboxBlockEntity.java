@@ -30,6 +30,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.Nameable;
 import net.minecraft.world.item.component.DyedItemColor;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -75,11 +76,22 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 				return;
 			if (Hyperbox.INSTANCE.commonConfig.autoForceHyperboxChunks.get())
 			{
-				childLevel.getChunk(HyperboxChunkGenerator.CHUNKPOS.x, HyperboxChunkGenerator.CHUNKPOS.z);
-				childLevel.setChunkForced(HyperboxChunkGenerator.CHUNKPOS.x, HyperboxChunkGenerator.CHUNKPOS.z, true);
-				// we have to do this to make the child world's chunk start ticking
-				childLevel.getChunkSource().updateChunkForced(HyperboxChunkGenerator.CHUNKPOS, true);
+				int chunkRadius = 10;
+
+				for (int chunkX = 0; chunkX < chunkRadius; chunkX++) {
+					for (int chunkZ = 0; chunkZ < chunkRadius; chunkZ++) {
+						// Calculate chunk ID
+						ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
+						long chunkId = chunkPos.toLong();
+
+
+						childLevel.getChunk(chunkPos.x, chunkPos.z);
+						childLevel.setChunkForced(chunkPos.x, chunkPos.z, true);
+						childLevel.getChunkSource().updateChunkForced(chunkPos, true);
+					}
+				}
 			}
+
 			BlockState thisState = this.getBlockState();
 			Direction[] dirs = Direction.values();
 			for (Direction dir : dirs)

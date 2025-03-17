@@ -13,7 +13,7 @@ public class HyperboxRenderInfo extends DimensionSpecialEffects
 		// fog type -- overworld has NORMAL, nether has NONE, end has END
 		// force bright lightmap -- affects *color* of lighting -- only true for end
 		// constant ambient light -- makes bottom of blocks appear brighter, tops appear dimmer -- only true for nether
-        super(Float.NaN, true, DimensionSpecialEffects.SkyType.NONE, true, true);
+        super(Float.NaN, true, SkyType.NORMAL, true, true);
 	}
 
 	// get brightness dependent fog color
