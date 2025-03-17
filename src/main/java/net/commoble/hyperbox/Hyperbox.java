@@ -66,16 +66,17 @@ import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.neoforged.neoforge.registries.NeoForgeRegistries;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 
-// The value here should match an entry in the META-INF/mods.toml file
 @Mod(Hyperbox.MODID)
 public class Hyperbox
 {
 	public static final String MODID = "hyperbox";
-	public static Hyperbox INSTANCE;
+	public static Hyperbox modInstance;
 	
 	public static final ResourceLocation HYPERBOX_ID = id(Names.HYPERBOX);
-	// keys for the hyperbox dimension stuff
+
 	public static final ResourceKey<Biome> BIOME_KEY = ResourceKey.create(Registries.BIOME, HYPERBOX_ID);
 	public static final ResourceKey<Level> WORLD_KEY = ResourceKey.create(Registries.DIMENSION, HYPERBOX_ID);
 	public static final ResourceKey<LevelStem> DIMENSION_KEY = ResourceKey.create(Registries.LEVEL_STEM, HYPERBOX_ID);
@@ -85,7 +86,6 @@ public class Hyperbox
 	
 	public final CommonConfig commonConfig;
 	public final Supplier<HyperboxBlock> hyperboxBlock;
-	// the placement preview renderer gets the color handler from the player's currently held item instead of the blockstate
 	public final Supplier<HyperboxBlock> hyperboxPreviewBlock;
 	public final Supplier<ApertureBlock> apertureBlock;
 	public final Supplier<Block> hyperboxWall;
@@ -99,10 +99,10 @@ public class Hyperbox
 	
 	public Hyperbox(IEventBus modBus)
 	{
-		INSTANCE = this;
+		modInstance = this;
 		
 		IEventBus forgeBus = NeoForge.EVENT_BUS;
-		
+
 		this.commonConfig = ConfigHelper.register(MODID, ModConfig.Type.COMMON, CommonConfig::new);
 		
 		// create and set up registrars
@@ -114,32 +114,32 @@ public class Hyperbox
 		DeferredRegister<AttachmentType<?>> attachmentTypes = defreg(modBus, NeoForgeRegistries.Keys.ATTACHMENT_TYPES);
 		DeferredRegister<DataComponentType<?>> dataComponentTypes = defreg(modBus, Registries.DATA_COMPONENT_TYPE);
 		
-		this.hyperboxBlock = blocks.register(Names.HYPERBOX, () -> new HyperboxBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.PURPUR_BLOCK).strength(2F, 1200F).isRedstoneConductor(HyperboxBlock::getIsNormalCube)));
-		this.hyperboxPreviewBlock = blocks.register(Names.HYPERBOX_PREVIEW, () -> new HyperboxBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.PURPUR_BLOCK).strength(2F, 1200F).isRedstoneConductor(HyperboxBlock::getIsNormalCube)));
+		this.hyperboxBlock = blocks.register(Names.HYPERBOX, () -> new HyperboxBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.PURPUR_BLOCK).strength(2F, 1200F).isRedstoneConductor((state1, world, pos) -> false)));
+		this.hyperboxPreviewBlock = blocks.register(Names.HYPERBOX_PREVIEW, () -> new HyperboxBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.PURPUR_BLOCK).strength(2F, 1200F).isRedstoneConductor((state1, world, pos) -> false)));
 		this.hyperboxItem = items.register(Names.HYPERBOX, () -> new BlockItem(this.hyperboxBlock.get(), new Item.Properties()));
 		this.hyperboxBlockEntityType = tileEntities.register(Names.HYPERBOX, () -> BlockEntityType.Builder.of(HyperboxBlockEntity::create, this.hyperboxBlock.get()).build(null));
 		
-		this.apertureBlock = blocks.register(Names.APERTURE, () -> new ApertureBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.BARRIER).mapColor(MapColor.NONE).lightLevel(state -> 6).isRedstoneConductor(HyperboxBlock::getIsNormalCube)));
+		this.apertureBlock = blocks.register(Names.APERTURE, () -> new ApertureBlock(BlockBehaviour.Properties.ofFullCopy(Blocks.BARRIER).mapColor(MapColor.NONE).lightLevel(state -> 6).isRedstoneConductor((state1, world, pos) -> false)));
 		this.apertureBlockEntityType = tileEntities.register(Names.APERTURE, () -> BlockEntityType.Builder.of(ApertureBlockEntity::create, this.apertureBlock.get()).build(null));
 		
 		this.hyperboxWall = blocks.register(Names.HYPERBOX_WALL,
 				() -> new Block(BlockBehaviour.Properties
 						.ofFullCopy(Blocks.BARRIER)
 						.mapColor(MapColor.NONE)
-						.lightLevel((state) -> 15)) {
+						.lightLevel((BlockState state) -> 15)) {
 					@Override
-					public boolean propagatesSkylightDown(BlockState state, BlockGetter world, BlockPos pos) {
+					public boolean propagatesSkylightDown(@NotNull BlockState state, @NotNull BlockGetter world, @NotNull BlockPos pos) {
 						return true;
 					}
 				}
 		);
 
-		this.hyperboxMenuType = menuTypes.register(Names.HYPERBOX, () -> new MenuType<HyperboxMenu>(HyperboxMenu::makeClientMenu, FeatureFlags.VANILLA_SET));
+		this.hyperboxMenuType = menuTypes.register(Names.HYPERBOX, () -> new MenuType<>((id, playerInventory) -> HyperboxMenu.makeClientMenu(id), FeatureFlags.VANILLA_SET));
 		
 		this.hyperboxChunkGeneratorCodec = chunkGeneratorCodecs.register(Names.HYPERBOX, HyperboxChunkGenerator::makeCodec);
 		
 		this.returnPointAttachment = attachmentTypes.register(Names.RETURN_POINT, () -> AttachmentType.builder(() -> ReturnPoint.EMPTY)
-			.serialize(ReturnPoint.CODEC, rp -> !rp.data().isEmpty())
+			.serialize(ReturnPoint.CODEC, rp -> rp.data().isPresent())
 			.copyOnDeath()
 			.build());
 		
@@ -172,7 +172,7 @@ public class Hyperbox
 	}
 	
 	@SuppressWarnings("unchecked")
-	private <T,C> void genericallyRegisterBlockCap(RegisterCapabilitiesEvent event, BlockCapability<T,C> blockCap)
+	private <T,C> void genericallyRegisterBlockCap(@NotNull RegisterCapabilitiesEvent event, BlockCapability<T,C> blockCap)
 	{
 		event.registerBlockEntity(blockCap, hyperboxBlockEntityType.get(), (be, context) -> context instanceof Direction direction
 			? be.getCapability((BlockCapability<T,Direction>)blockCap, direction)
@@ -182,13 +182,13 @@ public class Hyperbox
 			: null);
 	}
 	
-	private void onRegisterPayloads(RegisterPayloadHandlersEvent event)
+	private void onRegisterPayloads(@NotNull RegisterPayloadHandlersEvent event)
 	{
 		event.registrar(MODID)
 			.playToServer(C2SSaveHyperboxPacket.TYPE, C2SSaveHyperboxPacket.STREAM_CODEC, C2SSaveHyperboxPacket::handle);
 	}
 	
-	private void onBuildTabContents(BuildCreativeModeTabContentsEvent event)
+	private void onBuildTabContents(@NotNull BuildCreativeModeTabContentsEvent event)
 	{
 		if (event.getTabKey() == CreativeModeTabs.FUNCTIONAL_BLOCKS || event.getTabKey() == CreativeModeTabs.REDSTONE_BLOCKS)
 		{
@@ -196,7 +196,7 @@ public class Hyperbox
 		}
 	}
 	
-	private void onUnregisterDimension(UnregisterDimensionEvent event)
+	private void onUnregisterDimension(@NotNull UnregisterDimensionEvent event)
 	{
 		ServerLevel level = event.getLevel();
 		MinecraftServer server = level.getServer();
@@ -213,14 +213,14 @@ public class Hyperbox
 		}
 	}
 	
-	private void onPreLevelTick(LevelTickEvent.Pre event)
+	private void onPreLevelTick(LevelTickEvent.@NotNull Pre event)
 	{
 		if (!(event.getLevel() instanceof ServerLevel serverLevel))
 		{
 			return;
 		}
-		
-		if (this.commonConfig.autoForceHyperboxChunks.get() && HyperboxDimension.getDimensionType(serverLevel.getServer()) == serverLevel.dimensionType())
+
+		if (Boolean.TRUE.equals(this.commonConfig.autoForceHyperboxChunks.get()) && HyperboxDimension.getDimensionType(serverLevel.getServer()) == serverLevel.dimensionType())
 		{
 			int chunkRadius = 10;
 
@@ -231,17 +231,13 @@ public class Hyperbox
 				for(int chunkZ = 0; chunkZ < chunkRadius; chunkZ++) {
 					ChunkPos pos = new ChunkPos(chunkX, chunkZ);
 
-					long chunkid = pos.toLong();
-
-					// if(isChunkForced != shouldChunkBeForced)
-
-					serverLevel.setChunkForced(pos.x, pos.z, true); // call shouldChunkBeForced
+					if (isChunkForced != shouldChunkBeForced) serverLevel.setChunkForced(pos.x, pos.z, true); // call shouldChunkBeForced
 				}
 			}
 		}
 	}
 	
-	private void onPostLevelTick(LevelTickEvent.Post event)
+	private void onPostLevelTick(LevelTickEvent.@NotNull Post event)
 	{		
 		if (!(event.getLevel() instanceof ServerLevel serverLevel))
 		{
@@ -262,13 +258,10 @@ public class Hyperbox
 	
 	public static boolean shouldUnloadDimension(MinecraftServer server, @Nonnull ServerLevel targetLevel)
 	{
-		// only unload hyperbox dimensions
 		DimensionType hyperboxDimensionType = HyperboxDimension.getDimensionType(server);
 		if (hyperboxDimensionType != targetLevel.dimensionType())
 			return false;
 		
-		// only run this once a second as the getBlockEntity call flags the parent chunk to be kept loaded another tick
-		// which prevents the hyperbox-chunk-unloader from running
 		if ((targetLevel.getGameTime() + targetLevel.hashCode()) % 20 != 0)
 			return false;
 		
@@ -276,17 +269,13 @@ public class Hyperbox
 		ResourceKey<Level> parentKey = hyperboxData.getParentWorld();
 		BlockPos parentPos = hyperboxData.getParentPos();
 		
-		// if we can't find the parent world, unload the hyperbox dimension
 		@Nullable ServerLevel parentLevel = server.getLevel(parentKey);
 		if (parentLevel == null)
 			return true;
 		
-		// don't load chunks in the tick event
-		// if we can't check the chunk, we can't verify that the dimension should be unloaded
 		if (!parentLevel.hasChunk(parentPos.getX()>>4, parentPos.getZ()>>4))
 			return false;
 		
-		// if the te doesn't exist or isn't a hyperbox, return true and unload
 		BlockEntity te = parentLevel.getBlockEntity(parentPos);
 		if (!(te instanceof HyperboxBlockEntity hyperbox))
 			return true;
@@ -294,14 +283,12 @@ public class Hyperbox
 		ResourceKey<Level> key = targetLevel.dimension();
 		
 		return hyperbox.getLevelKey()
-			// if the te points to our dimension, return false and don't unload
 			.map(childKey -> !childKey.equals(key))
-			// if the te doesn't point anywhere, return true and unload
 			.orElse(true);
 	}
 
 	@SuppressWarnings("deprecation")
-	private static boolean shouldHyperboxChunkBeForced(ServerLevel hyperboxLevel)
+	private static boolean shouldHyperboxChunkBeForced(@NotNull ServerLevel hyperboxLevel)
 	{
 		MinecraftServer server = hyperboxLevel.getServer();
 		HyperboxSaveData data = HyperboxSaveData.getOrCreate(hyperboxLevel);
@@ -314,15 +301,15 @@ public class Hyperbox
 		return parentLevel.hasChunkAt(parentPos);
 	}
 	
-	// create and subscribe a forge DeferredRegister
-	private static <T> DeferredRegister<T> defreg(IEventBus modBus, ResourceKey<Registry<T>> registry)
+	private static <T> @NotNull DeferredRegister<T> defreg(IEventBus modBus, ResourceKey<Registry<T>> registry)
 	{
 		DeferredRegister<T> register = DeferredRegister.create(registry, MODID);
 		register.register(modBus);
 		return register;
 	}
 	
-	public static ResourceLocation id(String path)
+	@Contract("_ -> new")
+	public static @NotNull ResourceLocation id(String path)
 	{
 		return ResourceLocation.fromNamespaceAndPath(MODID, path);
 	}

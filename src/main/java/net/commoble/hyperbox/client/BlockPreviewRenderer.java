@@ -17,37 +17,30 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.model.data.ModelData;
+import org.jetbrains.annotations.NotNull;
 
-/**
- * Wrapper class around the vanilla block renderer so we don't have to copy five
- * functions verbatim
- **/
 public class BlockPreviewRenderer extends ModelBlockRenderer
 {
-	private static BlockPreviewRenderer INSTANCE;
+	private static BlockPreviewRenderer modInstance;
 	
 	public static BlockPreviewRenderer getInstance(ModelBlockRenderer baseRenderer)
 	{
-		if (INSTANCE == null || INSTANCE.blockColors != baseRenderer.blockColors)
+		if (modInstance == null || modInstance.blockColors != baseRenderer.blockColors)
 		{
-			INSTANCE = new BlockPreviewRenderer(baseRenderer);
+			modInstance = new BlockPreviewRenderer(baseRenderer);
 		}
 		
-		return INSTANCE;
+		return modInstance;
 	}
-	public BlockPreviewRenderer(ModelBlockRenderer baseRenderer)
+	public BlockPreviewRenderer(@NotNull ModelBlockRenderer baseRenderer)
 	{
 		super(baseRenderer.blockColors);
 	}
 
-	// invoked from the DrawSelectionEvent.HighlightBlock event
-	public static void renderBlockPreview(BlockPos pos, BlockState state, Level level, Vec3 currentRenderPos, PoseStack matrix, MultiBufferSource renderTypeBuffer)
+	public static void renderBlockPreview(@NotNull BlockPos pos, BlockState state, Level level, @NotNull Vec3 currentRenderPos, @NotNull PoseStack matrix, @NotNull MultiBufferSource renderTypeBuffer)
 	{
 		matrix.pushPose();
 	
-		// the current position of the matrix stack is the position of the player's
-		// viewport (the head, essentially)
-		// we want to move it to the correct position to render the block at
 		double offsetX = pos.getX() - currentRenderPos.x();
 		double offsetY = pos.getY() - currentRenderPos.y();
 		double offsetZ = pos.getZ() - currentRenderPos.z();
@@ -55,11 +48,7 @@ public class BlockPreviewRenderer extends ModelBlockRenderer
 	
 		BlockRenderDispatcher blockDispatcher = Minecraft.getInstance().getBlockRenderer();
 		ModelBlockRenderer renderer = getInstance(blockDispatcher.getModelRenderer());
-		// this render type is which buffer to render to
 		RenderType bufferType = Sheets.translucentCullBlockSheet();
-		// this render type is which render type to get quads for from the model
-		// null => all quads
-		RenderType renderType = null;
 		renderer.tesselateWithoutAO(
 			level,
 			blockDispatcher.getBlockModel(state),
@@ -72,14 +61,14 @@ public class BlockPreviewRenderer extends ModelBlockRenderer
 			state.getSeed(pos),
 			OverlayTexture.NO_OVERLAY,
 			ModelData.EMPTY,
-			renderType);
+                null);
 	
 		matrix.popPose();
 	}
 
 	@Override
-	public void putQuadData(BlockAndTintGetter level, BlockState state, BlockPos pos, VertexConsumer vertexConsumer, PoseStack.Pose pose, BakedQuad quad,
-		float tintA, float tintB, float tintC, float tintD, int brightness0, int brightness1, int brightness2, int brightness3, int combinedOverlayIn)
+	public void putQuadData(@NotNull BlockAndTintGetter level, @NotNull BlockState state, @NotNull BlockPos pos, @NotNull VertexConsumer vertexConsumer, PoseStack.@NotNull Pose pose, @NotNull BakedQuad quad,
+							float tintA, float tintB, float tintC, float tintD, int brightness0, int brightness1, int brightness2, int brightness3, int combinedOverlayIn)
 	{
 		float r=1F;
 		float g=1F;
@@ -92,8 +81,6 @@ public class BlockPreviewRenderer extends ModelBlockRenderer
 			g = (i >> 8 & 255) / 255.0F;
 			b = (i & 255) / 255.0F;
 		}
-		
-		// putBulkData with alpha value instead of 1
 		vertexConsumer.putBulkData(pose, quad, new float[]{tintA, tintB, tintC, tintD}, r, g, b, alpha, new int[]{brightness0, brightness1, brightness2, brightness3}, combinedOverlayIn, true);
 	}
 }

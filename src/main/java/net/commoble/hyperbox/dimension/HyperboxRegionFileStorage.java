@@ -9,8 +9,8 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.storage.RegionFileStorage;
 import net.minecraft.world.level.chunk.storage.RegionStorageInfo;
+import org.jetbrains.annotations.NotNull;
 
-// ensure the hyperbox dimensions only serialize the one chunk they have to reduce hard drive space per hyperbox 
 public class HyperboxRegionFileStorage extends RegionFileStorage
 {
 
@@ -20,14 +20,8 @@ public class HyperboxRegionFileStorage extends RegionFileStorage
 	}
 
 	@Override
-	protected void write(ChunkPos pos, CompoundTag compound) throws IOException
-	{
-		super.write(pos, compound);
-	}
-
-	@Override
 	@Nullable
-	public CompoundTag read(ChunkPos pos) throws IOException
+	public CompoundTag read(@NotNull ChunkPos pos) throws IOException
 	{
 		return super.read(pos);
 	}

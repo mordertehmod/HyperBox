@@ -15,10 +15,9 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 
-// WorldSavedData is used for storing extra data in ServerWorld instances
-
-// this class is used for storing information in a hyperbox world
 public class HyperboxSaveData extends SavedData
 {
 	public static final String DATA_KEY = Hyperbox.MODID;
@@ -31,26 +30,25 @@ public class HyperboxSaveData extends SavedData
 		HyperboxSaveData::load,
 		null);
 	
-	// ID of the world this hyperbox world's parent block is located in
 	private ResourceKey<Level> parentWorld = Level.OVERWORLD;
 	public ResourceKey<Level> getParentWorld() { return this.parentWorld; }
-	// position of this hyperbox world's parent block
 	private BlockPos parentPos = DEFAULT_PARENT_POS;
 	public BlockPos getParentPos() { return this.parentPos; }
 	
-	public static HyperboxSaveData getOrCreate(ServerLevel world)
+	public static @NotNull HyperboxSaveData getOrCreate(@NotNull ServerLevel world)
 	{
 		return world.getDataStorage().computeIfAbsent(FACTORY, DATA_KEY);
 	}
 	
-	public static HyperboxSaveData load(CompoundTag nbt, HolderLookup.Provider registries)
+	public static @NotNull HyperboxSaveData load(@NotNull CompoundTag nbt, HolderLookup.Provider registries)
 	{
 		ResourceKey<Level> parentWorld = ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(nbt.getString(PARENT_WORLD_KEY)));
 		BlockPos parentPos = NbtUtils.readBlockPos(nbt, PARENT_POS_KEY).orElse(DEFAULT_PARENT_POS);
 		return new HyperboxSaveData(parentWorld, parentPos);
 	}
 	
-	public static HyperboxSaveData create()
+	@Contract(" -> new")
+	public static @NotNull HyperboxSaveData create()
 	{
 		return new HyperboxSaveData(Level.OVERWORLD, DEFAULT_PARENT_POS);
 	}
@@ -82,7 +80,7 @@ public class HyperboxSaveData extends SavedData
 		this.setDirty();
 	}
 	
-	protected static void clearOldParent(MinecraftServer server, ResourceKey<Level> thisWorldKey, ResourceKey<Level> oldParentKey, BlockPos oldParentPos)
+	protected static void clearOldParent(@NotNull MinecraftServer server, ResourceKey<Level> thisWorldKey, ResourceKey<Level> oldParentKey, BlockPos oldParentPos)
 	{
 		ServerLevel oldParentWorld = server.getLevel(oldParentKey);
 		if (oldParentWorld != null
@@ -94,7 +92,7 @@ public class HyperboxSaveData extends SavedData
 	}
 
 	@Override
-	public CompoundTag save(CompoundTag compound, HolderLookup.Provider registries)
+	public @NotNull CompoundTag save(@NotNull CompoundTag compound, HolderLookup.@NotNull Provider registries)
 	{
 		compound.putString(PARENT_WORLD_KEY, this.parentWorld.location().toString());
 		compound.put(PARENT_POS_KEY, NbtUtils.writeBlockPos(this.parentPos));

@@ -3,7 +3,6 @@ package net.commoble.hyperbox.blocks;
 import io.netty.buffer.ByteBuf;
 import net.commoble.hyperbox.Hyperbox;
 import net.commoble.hyperbox.dimension.HyperboxDimension;
-import net.minecraft.core.Direction;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.codec.ByteBufCodecs;
@@ -16,6 +15,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
+import org.jetbrains.annotations.NotNull;
 
 public record C2SSaveHyperboxPacket(String name, boolean enterImmediate) implements CustomPacketPayload
 {
@@ -27,54 +27,42 @@ public record C2SSaveHyperboxPacket(String name, boolean enterImmediate) impleme
 		C2SSaveHyperboxPacket::new);
 	
 
-	public void handle(IPayloadContext context)
+	public void handle(@NotNull IPayloadContext context)
 	{
 		context.enqueueWork(() -> this.handleMainThread(context));
 	}
 	
-	private void handleMainThread(IPayloadContext context)
-	{
+	private void handleMainThread(@NotNull IPayloadContext context) {
 		Player p = context.player();
-		if (!(p instanceof ServerPlayer player) || !(player.containerMenu instanceof HyperboxMenu menu))
-		{
-			// don't do anything else if menu isn't open (averts possible spam from bad actors)
+		if (!(p instanceof ServerPlayer player) || !(player.containerMenu instanceof HyperboxMenu menu)) {
 			return;
 		}
 		ResourceLocation dimensionId = HyperboxDimension.generateId(player, this.name);
-		
+
 		ResourceKey<Level> levelKey = ResourceKey.create(Registries.DIMENSION, dimensionId);
 		ServerLevel level = player.serverLevel();
-		if (level.getServer().getLevel(levelKey) != null)
-		{
-			// send invalid dimension id packet: existing id
+		if (level.getServer().getLevel(levelKey) != null) {
 			player.displayClientMessage(Component.translatable("menu.hyperbox.message.existing_id", dimensionId), false);
 			player.closeContainer();
 			return;
 		}
-		
-		// everything is valid, we can set things now
+
 		menu.hyperbox().ifPresentOrElse(hyperbox ->
 		{
 			hyperbox.setLevelKey(levelKey);
-			if (this.name != null && !this.name.isEmpty())
-			{
+			if (!this.name.isEmpty()) {
 				hyperbox.setName(Component.literal(this.name));
 			}
-			if (this.enterImmediate)
-			{
-				// teleporting the player will close the menu as the player is no longer near the block
-				// DOWN will place the player in the middle of the empty hyperbox
-				hyperbox.teleportPlayerOrOpenMenu(player, Direction.DOWN);
-			}
-			else
-			{
+			if (this.enterImmediate) {
+				hyperbox.teleportPlayerOrOpenMenu(player);
+			} else {
 				player.closeContainer();
 			}
-		}, player::closeContainer); // menu should always have a hyperbox on the server but we'll handle the case anyway
+		}, player::closeContainer);
 	}
 
 	@Override
-	public Type<? extends CustomPacketPayload> type()
+	public @NotNull Type<? extends CustomPacketPayload> type()
 	{
 		return TYPE;
 	}

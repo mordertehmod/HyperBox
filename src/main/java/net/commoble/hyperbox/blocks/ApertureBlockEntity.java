@@ -21,6 +21,8 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.neoforged.neoforge.event.EventHooks;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 
 public class ApertureBlockEntity extends BlockEntity
 {
@@ -33,9 +35,10 @@ public class ApertureBlockEntity extends BlockEntity
 	
 	private int color = Hyperbox.DEFAULT_COLOR;
 
-	public static ApertureBlockEntity create(BlockPos pos, BlockState state)
+	@Contract("_, _ -> new")
+	public static @NotNull ApertureBlockEntity create(BlockPos pos, BlockState state)
 	{
-		return new ApertureBlockEntity(Hyperbox.INSTANCE.apertureBlockEntityType.get(), pos, state);
+		return new ApertureBlockEntity(Hyperbox.modInstance.apertureBlockEntityType.get(), pos, state);
 	}
 	
 	public ApertureBlockEntity(BlockEntityType<? extends ApertureBlockEntity> type, BlockPos pos, BlockState state)
@@ -55,9 +58,6 @@ public class ApertureBlockEntity extends BlockEntity
 			ServerLevel parentLevel = server.getLevel(parentLevelKey);
 			if (parentLevel != null)
 			{
-				// delegate to the potential TE on the other side of the parent hyperbox
-				// accounting for the rotation of the hyperbox's blockstate
-				// if we can't find a hyperbox block, then don't return a valid capability
 				BlockState parentState = parentLevel.getBlockState(parentPos);
 				Block parentBlock = parentState.getBlock();
 				if (parentBlock instanceof HyperboxBlock hyperboxBlock)
@@ -87,7 +87,8 @@ public class ApertureBlockEntity extends BlockEntity
 			this.color = color;
 			this.setChanged();
 			BlockState state = this.getBlockState();
-			this.level.sendBlockUpdated(this.worldPosition, state, state, Block.UPDATE_ALL);
+            assert this.level != null;
+            this.level.sendBlockUpdated(this.worldPosition, state, state, Block.UPDATE_ALL);
 		}
 	}
 	
@@ -97,12 +98,11 @@ public class ApertureBlockEntity extends BlockEntity
 		return Mth.clamp(output, 0, 15);
 	}
 	
-	public void updatePower(ServerLevel parentWorld, BlockPos neighborPos, BlockState neighborState, Direction directionToNeighbor)
+	public void updatePower(ServerLevel parentWorld, BlockPos neighborPos, @NotNull BlockState neighborState, Direction directionToNeighbor)
 	{
-		// get power from neighbor
-		int weakPower = neighborState.getSignal(parentWorld, neighborPos, directionToNeighbor);
-		int strongPower = neighborState.getDirectSignal(parentWorld, neighborPos, directionToNeighbor);
-		this.updatePower(weakPower,strongPower);
+		int privateWeakPower = neighborState.getSignal(parentWorld, neighborPos, directionToNeighbor);
+		int privateStrongPower = neighborState.getDirectSignal(parentWorld, neighborPos, directionToNeighbor);
+		this.updatePower(privateWeakPower,privateStrongPower);
 	}
 	
 	public void updatePower(int weakPower, int strongPower)
@@ -112,10 +112,9 @@ public class ApertureBlockEntity extends BlockEntity
 			this.weakPower = weakPower;
 			this.strongPower = strongPower;
 			BlockState thisState = this.getBlockState();
-			this.setChanged();	// mark te as needing its data saved
-			this.level.sendBlockUpdated(this.worldPosition, thisState, thisState, 3); // mark te as needing data synced
-			// notify neighbors so they react to the redstone output change
-			// notify neighbors so they react to the redstone output change
+			this.setChanged();
+            assert this.level != null;
+            this.level.sendBlockUpdated(this.worldPosition, thisState, thisState, 3);
 			Direction outputSide = thisState.getValue(ApertureBlock.FACING);
 			if (EventHooks.onNeighborNotify(this.level, this.worldPosition, thisState, java.util.EnumSet.of(outputSide), true).isCanceled())
 				return;
@@ -127,20 +126,20 @@ public class ApertureBlockEntity extends BlockEntity
 	}
 	
 	@Override
-	public void saveAdditional(CompoundTag compound, HolderLookup.Provider registries)
+	public void saveAdditional(@NotNull CompoundTag compound, HolderLookup.@NotNull Provider registries)
 	{
 		super.saveAdditional(compound, registries);
 		this.writeClientSensitiveData(compound);
 	}
 
 	@Override
-	public void loadAdditional(CompoundTag nbt, HolderLookup.Provider registries)
+	public void loadAdditional(@NotNull CompoundTag nbt, HolderLookup.@NotNull Provider registries)
 	{
 		super.loadAdditional(nbt, registries);
 		this.readClientSensitiveData(nbt);
 	}
 	
-	public CompoundTag writeClientSensitiveData(CompoundTag nbt)
+	public void writeClientSensitiveData(@NotNull CompoundTag nbt)
 	{
 		nbt.putInt(WEAK_POWER, this.weakPower);
 		nbt.putInt(STRONG_POWER, this.strongPower);
@@ -148,10 +147,9 @@ public class ApertureBlockEntity extends BlockEntity
 		{
 			nbt.putInt(COLOR, this.color);
 		}
-		return nbt;
 	}
 	
-	public void readClientSensitiveData(CompoundTag nbt)
+	public void readClientSensitiveData(@NotNull CompoundTag nbt)
 	{
 		this.weakPower = nbt.getInt(WEAK_POWER);
 		this.strongPower = nbt.getInt(STRONG_POWER);
@@ -161,34 +159,28 @@ public class ApertureBlockEntity extends BlockEntity
 		}
 	}
 
-	// called on server when the TE is initially loaded on client (e.g. when client loads chunk)
-	// this is handled by this.handleUpdateTag, which just calls read()
 	@Override
-	public CompoundTag getUpdateTag(HolderLookup.Provider registries)
+	public @NotNull CompoundTag getUpdateTag(HolderLookup.@NotNull Provider registries)
 	{
 		CompoundTag nbt = super.getUpdateTag(registries);
 		this.writeClientSensitiveData(nbt);
 		return nbt;
 	}
 
-	// called on server when notifyBlockUpdate is called, packet will be sent to client
 	@Override
 	public ClientboundBlockEntityDataPacket getUpdatePacket()
 	{
-		// by default, this writes getUpdateTag into the packet
-		// we could theoretically write less data to reduce network traffic
 		return ClientboundBlockEntityDataPacket.create(this);
 	}
 
-	// called on client to read the packet sent from getUpdatePacket
 	@Override
-	public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt, HolderLookup.Provider registries)
+	public void onDataPacket(@NotNull Connection net, @NotNull ClientboundBlockEntityDataPacket pkt, HolderLookup.@NotNull Provider registries)
 	{
 		this.readClientSensitiveData(pkt.getTag());
 	}
 
 	@Override
-	public void handleUpdateTag(CompoundTag tag, HolderLookup.Provider registries)
+	public void handleUpdateTag(@NotNull CompoundTag tag, HolderLookup.@NotNull Provider registries)
 	{
 		this.readClientSensitiveData(tag);
 	}

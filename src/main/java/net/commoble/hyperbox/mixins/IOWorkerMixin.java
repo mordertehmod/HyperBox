@@ -2,6 +2,7 @@ package net.commoble.hyperbox.mixins;
 
 import java.nio.file.Path;
 
+import org.jetbrains.annotations.NotNull;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.gen.Accessor;
@@ -20,10 +21,12 @@ public abstract class IOWorkerMixin
 	@Mutable
 	@Accessor
 	public abstract void setStorage(RegionFileStorage cache);
-	
+
 	@Inject(method="<init>", at=@At("RETURN"))
-	private void onConstruction(RegionStorageInfo rsi, Path path, boolean sync, CallbackInfo info)
+	private void onConstruction(RegionStorageInfo rsi, Path path, boolean sync, @NotNull CallbackInfo info)
 	{
-		MixinCallbacks.onIOWorkerConstruction(rsi, path, sync, this::setStorage);
+		if (!info.isCancelled()) {
+			MixinCallbacks.onIOWorkerConstruction(rsi, path, sync, this::setStorage);
+		}
 	}
 }

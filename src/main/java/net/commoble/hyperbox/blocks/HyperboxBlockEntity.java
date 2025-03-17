@@ -1,5 +1,6 @@
 package net.commoble.hyperbox.blocks;
 
+import java.util.Objects;
 import java.util.Optional;
 
 import javax.annotation.Nullable;
@@ -40,6 +41,8 @@ import net.minecraft.world.level.dimension.DimensionType;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.neoforged.neoforge.event.EventHooks;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 
 public class HyperboxBlockEntity extends BlockEntity implements Nameable
 {
@@ -48,17 +51,16 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 	public static final String WEAK_POWER = "weak_power";
 	public static final String STRONG_POWER = "strong_power";
 	public static final String COLOR = "color";
-	// key to the hyperbox world stored in this te
 	private Optional<ResourceKey<Level>> levelKey = Optional.empty();
 	private Optional<Component> name = Optional.empty();
 	private int color = Hyperbox.DEFAULT_COLOR;
-	// power output by side index of "original"/unrotated output side (linked to the aperture on the same side of the subdimension)
 	private int[] weakPowerDUNSWE = {0,0,0,0,0,0};
 	private int[] strongPowerDUNSWE = {0,0,0,0,0,0};
 	
-	public static HyperboxBlockEntity create(BlockPos pos, BlockState state)
+	@Contract("_, _ -> new")
+	public static @NotNull HyperboxBlockEntity create(BlockPos pos, BlockState state)
 	{
-		return new HyperboxBlockEntity(Hyperbox.INSTANCE.hyperboxBlockEntityType.get(), pos, state);
+		return new HyperboxBlockEntity(Hyperbox.modInstance.hyperboxBlockEntityType.get(), pos, state);
 	}
 	
 	public HyperboxBlockEntity(BlockEntityType<? extends HyperboxBlockEntity> type, BlockPos pos, BlockState state)
@@ -74,16 +76,13 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 			ServerLevel childLevel = this.getLevelIfKeySet(server);
 			if (childLevel == null)
 				return;
-			if (Hyperbox.INSTANCE.commonConfig.autoForceHyperboxChunks.get())
+			if (Boolean.TRUE.equals(Hyperbox.modInstance.commonConfig.autoForceHyperboxChunks.get()))
 			{
 				int chunkRadius = 10;
 
 				for (int chunkX = 0; chunkX < chunkRadius; chunkX++) {
 					for (int chunkZ = 0; chunkZ < chunkRadius; chunkZ++) {
-						// Calculate chunk ID
 						ChunkPos chunkPos = new ChunkPos(chunkX, chunkZ);
-						long chunkId = chunkPos.toLong();
-
 
 						childLevel.getChunk(chunkPos.x, chunkPos.z);
 						childLevel.setChunkForced(chunkPos.x, chunkPos.z, true);
@@ -104,7 +103,7 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 			{
 				this.getAperture(server, sideOfChildLevel).ifPresent(aperture ->{
 					BlockPos aperturePos = aperture.getBlockPos();
-					aperture.getBlockState().onNeighborChange(aperture.getLevel(), aperturePos, aperturePos.relative(sideOfChildLevel.getOpposite()));
+					aperture.getBlockState().onNeighborChange(Objects.requireNonNull(aperture.getLevel()), aperturePos, aperturePos.relative(sideOfChildLevel.getOpposite()));
 				});
 			}
 			
@@ -118,7 +117,8 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 			this.color = color;
 			this.setChanged();
 			BlockState state = this.getBlockState();
-			this.level.sendBlockUpdated(this.worldPosition, state, state, Block.UPDATE_ALL);
+            assert this.level != null;
+            this.level.sendBlockUpdated(this.worldPosition, state, state, Block.UPDATE_ALL);
 			this.level.setBlocksDirty(this.worldPosition, state, state);
 		}
 	}
@@ -136,7 +136,6 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 	public void setLevelKey(ResourceKey<Level> key)
 	{
 		this.levelKey = Optional.ofNullable(key);
-		// force creation of level key to reserve it and sync key to client dimension lists
 		if (this.level instanceof ServerLevel level)
 		{
 			this.getLevelIfKeySet(level.getServer());
@@ -145,7 +144,7 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 	}
 
 	@Override
-	public Component getName()
+	public @NotNull Component getName()
 	{
 		return this.name.orElse(Component.translatable("block.hyperbox.hyperbox"));
 	}
@@ -161,7 +160,8 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 	{
 		this.name = Optional.ofNullable(name);
 		this.setChanged();
-		this.level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
+        assert this.level != null;
+        this.level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_ALL);
 	}
 	
 	@Nullable
@@ -170,7 +170,8 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 		return this.levelKey.map(key ->
 		{
 			ServerLevel targetWorld = this.getChildWorld(server, key);
-			HyperboxSaveData.getOrCreate(targetWorld).setWorldPos(server, targetWorld, targetWorld.dimension(), this.level.dimension(), this.worldPosition, this.getColor());
+            assert this.level != null;
+            HyperboxSaveData.getOrCreate(targetWorld).setWorldPos(server, targetWorld, targetWorld.dimension(), this.level.dimension(), this.worldPosition, this.getColor());
 			return targetWorld;
 		})
 			.orElse(null);
@@ -181,7 +182,7 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 		return InfiniverseAPI.get().getOrCreateLevel(server, key, () -> HyperboxDimension.createDimension(server));
 	}
 	
-	public int getPower(boolean strong, Direction originalFace)
+	public int getPower(boolean strong, @NotNull Direction originalFace)
 	{
 		int output = (strong ? this.strongPowerDUNSWE : this.weakPowerDUNSWE)[originalFace.get3DDataValue()] - 1;
 		return Mth.clamp(output,0,15);
@@ -192,7 +193,6 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 	{
 		BlockState thisState = this.getBlockState();
 		Block thisBlock = thisState.getBlock();
-		// delegate to the capability of the block facing the linked aperture in the hyperspace cube
 		if (thisBlock instanceof HyperboxBlock hyperboxBlock && this.level instanceof ServerLevel serverLevel)
 		{
 			ServerLevel targetLevel = this.getLevelIfKeySet(serverLevel.getServer());
@@ -236,8 +236,8 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 				this.weakPowerDUNSWE[originalFaceIndex] = weakPower;
 				this.strongPowerDUNSWE[originalFaceIndex] = strongPower;
 				this.setChanged();	// mark te as needing its data saved
-				this.level.sendBlockUpdated(this.worldPosition, thisState, thisState, 3); // mark te as needing data synced
-				// notify neighbors so they react to the redstone output change
+                assert this.level != null;
+                this.level.sendBlockUpdated(this.worldPosition, thisState, thisState, 3); // mark te as needing data synced
 				if (EventHooks.onNeighborNotify(this.level, this.worldPosition, thisState, java.util.EnumSet.of(originalFace), true).isCanceled())
 					return;
 				BlockPos adjacentPos = this.worldPosition.relative(worldSpaceFace);
@@ -246,39 +246,36 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 			}
 		}
 	}
-	
-	public void teleportPlayerOrOpenMenu(ServerPlayer serverPlayer, Direction faceActivated)
+
+	public void teleportPlayerOrOpenMenu(@NotNull ServerPlayer serverPlayer)
 	{
 		ServerLevel level = serverPlayer.serverLevel();
 		MinecraftServer server = level.getServer();
 		ServerLevel targetLevel = this.getLevelIfKeySet(server);
+
 		if (targetLevel == null)
 		{
-			// if hyperbox doesn't have a dimension bound yet
 			serverPlayer.openMenu(HyperboxMenu.makeServerMenu(this));
 		}
+
 		else
 		{
-			// if hyperbox already has a dimension bound
 			BlockPos pos = this.getBlockPos();
-			BlockState state = this.getBlockState();
 			DimensionType hyperboxDimensionType = HyperboxDimension.getDimensionType(server);
+
 			if (hyperboxDimensionType != level.dimensionType())
 			{
 				ReturnPoint.setReturnPoint(serverPlayer, level.dimension(), pos);
 			}
-			BlockPos posAdjacentToAperture = ((HyperboxBlock)state.getBlock()).getPosAdjacentToAperture(state, faceActivated);
-			BlockPos spawnPoint = SpawnPointHelper.getBestSpawnPosition(
-				targetLevel,
-				posAdjacentToAperture,
-				HyperboxChunkGenerator.MIN_SPAWN_CORNER,
-				HyperboxChunkGenerator.MAX_SPAWN_CORNER);
-			DelayedTeleportData.getOrCreate(serverPlayer.serverLevel()).schedulePlayerTeleport(serverPlayer, targetLevel.dimension(), Vec3.atCenterOf(spawnPoint));
+
+			Vec3 exactSpawnPos = SpawnPointHelper.getExactSpawnPosition(targetLevel);
+			DelayedTeleportData.getOrCreate(serverPlayer.serverLevel()).schedulePlayerTeleport(
+					serverPlayer, targetLevel.dimension(), exactSpawnPos);
 		}
 	}
 
 	@Override
-	public void saveAdditional(CompoundTag compound, HolderLookup.Provider registries)
+	public void saveAdditional(@NotNull CompoundTag compound, HolderLookup.@NotNull Provider registries)
 	{
 		super.saveAdditional(compound, registries);
 		this.levelKey.ifPresent(key -> compound.putString(WORLD_KEY, key.location().toString()));
@@ -286,7 +283,7 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 	}
 
 	@Override
-	public void loadAdditional(CompoundTag nbt, HolderLookup.Provider registries)
+	public void loadAdditional(@NotNull CompoundTag nbt, HolderLookup.@NotNull Provider registries)
 	{
 		super.loadAdditional(nbt, registries);
 		this.levelKey = nbt.contains(WORLD_KEY)
@@ -295,22 +292,19 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 		this.readClientSensitiveData(nbt, registries);
 	}
 	
-	protected CompoundTag writeClientSensitiveData(CompoundTag nbt, HolderLookup.Provider registries)
+	protected void writeClientSensitiveData(CompoundTag nbt, HolderLookup.Provider registries)
 	{
 		this.name.ifPresent(theName ->
-		{
-			nbt.putString(NAME, Component.Serializer.toJson(theName, registries));
-		});
+                nbt.putString(NAME, Component.Serializer.toJson(theName, registries)));
 		if (this.color != Hyperbox.DEFAULT_COLOR)
 		{
 			nbt.putInt(COLOR, this.color);
 		}
 		nbt.putIntArray(WEAK_POWER, this.weakPowerDUNSWE);
 		nbt.putIntArray(STRONG_POWER, this.strongPowerDUNSWE);
-		return nbt;
 	}
 	
-	protected void readClientSensitiveData(CompoundTag nbt, HolderLookup.Provider registries)
+	protected void readClientSensitiveData(@NotNull CompoundTag nbt, HolderLookup.Provider registries)
 	{
 		this.name = nbt.contains(NAME)
 			? Optional.ofNullable(Component.Serializer.fromJson(nbt.getString(NAME), registries))
@@ -322,52 +316,47 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 		this.strongPowerDUNSWE = nbt.getIntArray(STRONG_POWER);
 	}
 
-	// called on server when the TE is initially loaded on client (e.g. when client loads chunk)
-	// this is handled by this.handleUpdateTag, which just calls read()
 	@Override
-	public CompoundTag getUpdateTag(HolderLookup.Provider registries)
+	public @NotNull CompoundTag getUpdateTag(HolderLookup.@NotNull Provider registries)
 	{
 		CompoundTag nbt = super.getUpdateTag(registries);
 		this.writeClientSensitiveData(nbt, registries);
 		return nbt;
 	}
 
-	// called on server when notifyBlockUpdate is called, packet will be sent to client
 	@Override
 	public ClientboundBlockEntityDataPacket getUpdatePacket()
 	{
-		// just defers to getUpdateTag
 		return ClientboundBlockEntityDataPacket.create(this);
 	}
 
-	// called on client to read the packet sent from getUpdatePacket
 	@Override
-	public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt, HolderLookup.Provider registries)
+	public void onDataPacket(@NotNull Connection net, @NotNull ClientboundBlockEntityDataPacket pkt, HolderLookup.@NotNull Provider registries)
 	{
 		this.readClientSensitiveData(pkt.getTag(), registries);
 	}
 	
 	@Override
-	public void handleUpdateTag(CompoundTag nbt, HolderLookup.Provider registries)
+	public void handleUpdateTag(@NotNull CompoundTag nbt, HolderLookup.@NotNull Provider registries)
 	{
 		this.readClientSensitiveData(nbt, registries);
 	}
 	
 	@Override
-    protected void applyImplicitComponents(BlockEntity.DataComponentInput input) {
+    protected void applyImplicitComponents(BlockEntity.@NotNull DataComponentInput input) {
 		super.applyImplicitComponents(input);
 		this.name = Optional.ofNullable(input.get(DataComponents.CUSTOM_NAME));
 		this.color = input.getOrDefault(DataComponents.DYED_COLOR, new DyedItemColor(Hyperbox.DEFAULT_COLOR, true)).rgb();
-		this.levelKey = Optional.ofNullable(input.get(Hyperbox.INSTANCE.worldKeyDataComponent.get()));
+		this.levelKey = Optional.ofNullable(input.get(Hyperbox.modInstance.worldKeyDataComponent.get()));
 	}
 	
 	@Override
-    protected void collectImplicitComponents(DataComponentMap.Builder builder) {
+    protected void collectImplicitComponents(DataComponentMap.@NotNull Builder builder) {
     	this.name.ifPresent(n -> builder.set(DataComponents.CUSTOM_NAME, n));
     	if (this.color != Hyperbox.DEFAULT_COLOR)
     	{
     		builder.set(DataComponents.DYED_COLOR, new DyedItemColor(this.color, true));
     	}
-    	this.levelKey.ifPresent(key -> builder.set(Hyperbox.INSTANCE.worldKeyDataComponent.get(), key));
+    	this.levelKey.ifPresent(key -> builder.set(Hyperbox.modInstance.worldKeyDataComponent.get(), key));
     }
 }

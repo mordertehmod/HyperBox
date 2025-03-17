@@ -12,7 +12,6 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.client.gui.navigation.FocusNavigationEvent;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -20,6 +19,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.neoforged.neoforge.network.PacketDistributor;
+import org.jetbrains.annotations.NotNull;
 
 public class HyperboxScreen extends AbstractContainerScreen<HyperboxMenu>
 {
@@ -32,7 +32,7 @@ public class HyperboxScreen extends AbstractContainerScreen<HyperboxMenu>
 	private EditBox nameEdit;
 	private Button saveAndEnterButton;
 	private Button saveAndExitButton;
-	private Button cancelButton;
+
 
 	public HyperboxScreen(HyperboxMenu menu, Inventory playerInventory, Component component)
 	{
@@ -42,6 +42,7 @@ public class HyperboxScreen extends AbstractContainerScreen<HyperboxMenu>
 	@Override
 	protected void init()
 	{
+  Button cancelButton;
 		super.init();
 		
 		this.nameEdit = new EditBox(this.font, this.width/2 - 152, 40, 300, 20, EDIT_NAME_LABEL);
@@ -64,18 +65,21 @@ public class HyperboxScreen extends AbstractContainerScreen<HyperboxMenu>
 			.build();
 		this.saveAndExitButton.active = false;
 		this.addRenderableWidget(this.saveAndExitButton);
-		
-		this.cancelButton = Button.builder(CANCEL_LABEL, b -> this.minecraft.player.closeContainer())
+
+		cancelButton = Button.builder(CANCEL_LABEL, b -> {
+                    assert this.minecraft != null;
+                    assert this.minecraft.player != null;
+                    this.minecraft.player.closeContainer();
+                })
 			.bounds(this.width/2 -152, 130, 300, 20)
 			.build();
-		this.addRenderableWidget(this.cancelButton);
+		this.addRenderableWidget(cancelButton);
 		this.setInitialFocus(this.nameEdit);
 	}
 
 	@Override
 	public boolean keyPressed(int key, int scanCode, int mods)
 	{
-		// bypass AbstractContainerScreen#keyPressed so we don't close on inventory keybind
 		if (key == InputConstants.KEY_ESCAPE && this.shouldCloseOnEsc())
 		{
 			this.onClose();
@@ -94,11 +98,9 @@ public class HyperboxScreen extends AbstractContainerScreen<HyperboxMenu>
 				}
 				nextFocusPath = super.nextFocusPath(tabEvent);
 			}
-			
+
 			if (nextFocusPath != null)
-			{
-				this.changeFocus(nextFocusPath);
-			}
+                this.changeFocus(nextFocusPath);
 
 			return false;
 		}
@@ -125,7 +127,7 @@ public class HyperboxScreen extends AbstractContainerScreen<HyperboxMenu>
 	}
 	
 	@Override
-	public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTicks)
+	public void render(@NotNull GuiGraphics graphics, int mouseX, int mouseY, float partialTicks)
 	{
 		super.render(graphics, mouseX, mouseY, partialTicks);
 		graphics.drawCenteredString(this.font, this.title, this.width / 2, 10, 16777215);
@@ -142,25 +144,26 @@ public class HyperboxScreen extends AbstractContainerScreen<HyperboxMenu>
 	}
 
 	@Override
-	protected void renderBg(GuiGraphics graphics, float partialTicks, int mouseX, int mouseY)
+	protected void renderBg(@NotNull GuiGraphics graphics, float partialTicks, int mouseX, int mouseY)
 	{
 		
 	}
 	
 	protected void onSave(boolean enterImmediate)
 	{
-        this.minecraft.setScreen((Screen)null);
+        assert this.minecraft != null;
+        this.minecraft.setScreen(null);
 		this.saveAndEnterButton.active = false;
 		this.saveAndExitButton.active = false;
 		String name = this.nameEdit.getValue();
 		PacketDistributor.sendToServer(new C2SSaveHyperboxPacket(name, enterImmediate));
 	}
-	
-	@SuppressWarnings("resource")
+
 	public static boolean isDimensionIdFree(String name)
 	{
 		ResourceLocation dimensionId = HyperboxDimension.generateId(Minecraft.getInstance().player, name);
-		return !Minecraft.getInstance().player.connection.levels()
+        assert Minecraft.getInstance().player != null;
+        return !Minecraft.getInstance().player.connection.levels()
 			.contains(ResourceKey.create(Registries.DIMENSION, dimensionId));
 	}
 }

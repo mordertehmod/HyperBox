@@ -26,6 +26,7 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.NotNull;
 
 public class ApertureBlock extends Block implements EntityBlock
 {
@@ -39,20 +40,20 @@ public class ApertureBlock extends Block implements EntityBlock
 	}
 
 	@Override
-	protected void createBlockStateDefinition(Builder<Block, BlockState> builder)
+	protected void createBlockStateDefinition(@NotNull Builder<Block, BlockState> builder)
 	{
 		super.createBlockStateDefinition(builder);
 		builder.add(FACING);
 	}
 
 	@Override
-	public BlockEntity newBlockEntity(BlockPos pos, BlockState state)
+	public BlockEntity newBlockEntity(@NotNull BlockPos pos, @NotNull BlockState state)
 	{
-		return Hyperbox.INSTANCE.apertureBlockEntityType.get().create(pos, state);
+		return Hyperbox.modInstance.apertureBlockEntityType.get().create(pos, state);
 	}
 	
 	@Override
-	public InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit)
+	public @NotNull InteractionResult useWithoutItem(@NotNull BlockState state, @NotNull Level level, @NotNull BlockPos pos, @NotNull Player player, @NotNull BlockHitResult hit)
 	{
 		if (player instanceof ServerPlayer serverPlayer && level instanceof ServerLevel serverLevel)
 		{
@@ -68,71 +69,65 @@ public class ApertureBlock extends Block implements EntityBlock
 				destinationLevel = server.getLevel(Level.OVERWORLD);
 			}
 			Direction apertureFacing = state.getValue(FACING);
-			BlockState parentState = destinationLevel.getBlockState(parentPos);
+            assert destinationLevel != null;
+            BlockState parentState = destinationLevel.getBlockState(parentPos);
 			Block parentBlock = parentState.getBlock();
 			if (parentBlock instanceof HyperboxBlock hyperboxBlock)
 			{
 				Direction hyperboxFacing = hyperboxBlock.getCurrentFacing(parentState, apertureFacing.getOpposite()); 
 				targetPos = parentPos.relative(hyperboxFacing);
 				if (destinationLevel.getBlockState(targetPos).getDestroySpeed(destinationLevel, targetPos) < 0)
-				{	// if this face of the exit block faces the barrier, make the initial spawn search target be the exit block instead of the adjacent position
-					// (we do this so the spawn finder doesn't skip through the barrier)
+				{
 					targetPos = parentPos;
 				}
 				targetPos = SpawnPointHelper.getBestSpawnPosition(destinationLevel, targetPos, targetPos.offset(-3,-3,-3), targetPos.offset(3,3,3));
 			}
-			// else if parent pos is no longer a hyperblock for whatever reason, just teleport them to parentpos
-			
-			
+
 			DelayedTeleportData.getOrCreate(serverPlayer.serverLevel()).schedulePlayerTeleport(serverPlayer, destinationLevel.dimension(), Vec3.atCenterOf(targetPos));
 		}
 		return InteractionResult.SUCCESS;
 	}
 
-	// called after an adjacent blockstate changes	
 	@Override
-	@Deprecated
-	public void neighborChanged(BlockState thisState, Level level, BlockPos thisPos, Block fromBlock, BlockPos fromPos, boolean isMoving)
+	@Deprecated(forRemoval = false)
+	public void neighborChanged(@NotNull BlockState thisState, @NotNull Level level, @NotNull BlockPos thisPos, @NotNull Block fromBlock, @NotNull BlockPos fromPos, boolean isMoving)
 	{
-		this.onNeighborUpdated(thisState, level, thisPos, level.getBlockState(fromPos), fromPos);
+		this.onNeighborUpdated(thisState, level, level.getBlockState(fromPos), fromPos);
 		super.neighborChanged(thisState, level, thisPos, fromBlock, fromPos, isMoving);
 	}
 
-	// called when a neighboring te's data changes
 	@Override
-	public void onNeighborChange(BlockState thisState, LevelReader level, BlockPos thisPos, BlockPos neighborPos)
+	public void onNeighborChange(@NotNull BlockState thisState, @NotNull LevelReader level, @NotNull BlockPos thisPos, @NotNull BlockPos neighborPos)
 	{
-		this.onNeighborUpdated(thisState, level, thisPos, level.getBlockState(neighborPos), neighborPos);
-		// does nothing by default
+		this.onNeighborUpdated(thisState, level, level.getBlockState(neighborPos), neighborPos);
 		super.onNeighborChange(thisState, level, thisPos, neighborPos);
 	}
 	
-	protected void onNeighborUpdated(BlockState thisState, BlockGetter level, BlockPos thisPos, BlockState neighborState, BlockPos neighborPos)
+	protected void onNeighborUpdated(BlockState thisState, BlockGetter level, BlockState neighborState, BlockPos neighborPos)
 	{
 		if (level instanceof ServerLevel serverLevel)
 		{
-			// get power from neighbor
 			Direction directionToNeighbor = thisState.getValue(FACING);
 			int weakPower = neighborState.getSignal(level, neighborPos, directionToNeighbor);
 			int strongPower = neighborState.getDirectSignal(level, neighborPos, directionToNeighbor);
-			getLinkedHyperbox(serverLevel,thisPos).ifPresent(hyperbox -> {
+			getLinkedHyperbox(serverLevel).ifPresent(hyperbox -> {
 				hyperbox.updatePower(weakPower, strongPower, directionToNeighbor.getOpposite());
-				hyperbox.setChanged(); // invokes onNeighborChanged on adjacent blocks, so we can propagate neighbor changes, update capabilities, etc
+				hyperbox.setChanged();
 			});
 		}
 		
 	}
 	
 	@Override
-	@Deprecated
-	public boolean isSignalSource(BlockState state)
+	@Deprecated(forRemoval = false)
+	public boolean isSignalSource(@NotNull BlockState state)
 	{
 		return true;
 	}
 
 	@Override
-	@Deprecated
-	public int getSignal(BlockState blockState, BlockGetter level, BlockPos pos, Direction sideOfAdjacentBlock)
+	@Deprecated(forRemoval = false)
+	public int getSignal(@NotNull BlockState blockState, @NotNull BlockGetter level, @NotNull BlockPos pos, @NotNull Direction sideOfAdjacentBlock)
 	{
 		return level.getBlockEntity(pos) instanceof ApertureBlockEntity aperture
 			? aperture.getPower(false)
@@ -140,24 +135,24 @@ public class ApertureBlock extends Block implements EntityBlock
 	}
 
 	@Override
-	@Deprecated
-	public int getDirectSignal(BlockState blockState, BlockGetter level, BlockPos pos, Direction sideOfAdjacentBlock)
+	@Deprecated(forRemoval = false)
+	public int getDirectSignal(@NotNull BlockState blockState, @NotNull BlockGetter level, @NotNull BlockPos pos, @NotNull Direction sideOfAdjacentBlock)
 	{
 		return sideOfAdjacentBlock.getOpposite() == blockState.getValue(FACING)
 			&& level.getBlockEntity(pos) instanceof ApertureBlockEntity aperture
 				? aperture.getPower(true)
 				: 0;
 	}
-	
-	// get the hyperbox TE this aperture's world is linked to
-	public static Optional<HyperboxBlockEntity> getLinkedHyperbox(ServerLevel level, BlockPos thisPos)
+
+	public static Optional<HyperboxBlockEntity> getLinkedHyperbox(@NotNull ServerLevel level)
 	{
 		MinecraftServer server = level.getServer();
 		HyperboxSaveData data = HyperboxSaveData.getOrCreate(level);
 		BlockPos parentPos = data.getParentPos();
 		ResourceKey<Level> parentLevelKey = data.getParentWorld();
 		ServerLevel parentLevel = server.getLevel(parentLevelKey);
-		BlockEntity blockEntity = parentLevel.getBlockEntity(parentPos);
+        assert parentLevel != null;
+        BlockEntity blockEntity = parentLevel.getBlockEntity(parentPos);
 		return blockEntity instanceof HyperboxBlockEntity hyperbox ? Optional.of(hyperbox) : Optional.empty();
 	}
 }

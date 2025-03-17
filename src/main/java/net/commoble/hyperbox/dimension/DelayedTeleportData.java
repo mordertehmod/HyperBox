@@ -17,10 +17,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 
-// we can't teleport players from onBlockActivated as there are assumptions
-// in the right click processing that assume a player's world does not change
-// so what we'll do is schedule a teleport to occur at the end of the world tick
 public class DelayedTeleportData extends SavedData
 {
 	public static final String DATA_KEY = Hyperbox.MODID + "_delayed_events";
@@ -32,18 +31,19 @@ public class DelayedTeleportData extends SavedData
 	
 	private List<TeleportEntry> delayedTeleports = new ArrayList<>();
 	
-	public static DelayedTeleportData getOrCreate(ServerLevel level)
+	public static @NotNull DelayedTeleportData getOrCreate(@NotNull ServerLevel level)
 	{
 		return level.getDataStorage().computeIfAbsent(FACTORY, DATA_KEY);
 	}
 	
-	public static DelayedTeleportData load(CompoundTag nbt, HolderLookup.Provider registries)
+	@Contract("_, _ -> new")
+	public static @NotNull DelayedTeleportData load(CompoundTag nbt, HolderLookup.Provider registries)
 	{
-		// NOOP, data is transient
 		return DelayedTeleportData.create();
 	}
 	
-	public static DelayedTeleportData create()
+	@Contract(" -> new")
+	public static @NotNull DelayedTeleportData create()
 	{
 		return new DelayedTeleportData();
 	}
@@ -51,21 +51,12 @@ public class DelayedTeleportData extends SavedData
 	protected DelayedTeleportData()
 	{
 	}
-	
-	/**
-	 * This is to be called from the world tick event, if the world being ticked
-	 * is a ServerWorld and if the tick phase is the end of the world tick.
-	 * 
-	 * Does *not* create dynamic worlds that don't already exist,
-	 * So dynamic worlds should be created by the thing that schedules the tick, if possible
-	 * @param level The world that is being ticked and contains a data instance
-	 */
-	public static void tick(ServerLevel level)
+
+	public static void tick(@NotNull ServerLevel level)
 	{
 		MinecraftServer server = level.getServer();
 		DelayedTeleportData eventData = getOrCreate(level);
 		
-		// handle teleports
 		List<TeleportEntry> teleports = eventData.delayedTeleports;
 		eventData.delayedTeleports = new ArrayList<>();
 		for (TeleportEntry entry : teleports)
@@ -79,18 +70,18 @@ public class DelayedTeleportData extends SavedData
 		}
 	}
 	
-	public void schedulePlayerTeleport(Player player, ResourceKey<Level> destination, Vec3 targetVec)
+	public void schedulePlayerTeleport(@NotNull Player player, ResourceKey<Level> destination, Vec3 targetVec)
 	{
 		this.delayedTeleports.add(new TeleportEntry(player.getGameProfile().getId(), destination, targetVec));
 	}
 
 	@Override
-	public CompoundTag save(CompoundTag compound, HolderLookup.Provider registries)
+	public @NotNull CompoundTag save(@NotNull CompoundTag compound, HolderLookup.@NotNull Provider registries)
 	{
 		return compound;
 	}
 
-	private static record TeleportEntry(UUID playerUUID, ResourceKey<Level> targetLevel, Vec3 targetVec)
+	private record TeleportEntry(UUID playerUUID, ResourceKey<Level> targetLevel, Vec3 targetVec)
 	{
 	}
 }

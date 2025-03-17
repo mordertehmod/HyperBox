@@ -12,14 +12,13 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.DyedItemColor;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraft.world.level.block.state.BlockState;
 
 public class ColorHandlers
 {
 	public static final int NO_TINT = 0xFFFFFF;
 	public static final int BACKGROUND_TINT = 0;
 	
-	public static int getHyperboxBlockColor(BlockState state, @Nullable BlockAndTintGetter level, @Nullable BlockPos pos, int tintIndex)
+	public static int getHyperboxBlockColor(@Nullable BlockAndTintGetter level, @Nullable BlockPos pos, int tintIndex)
 	{
 		if (tintIndex == BACKGROUND_TINT)
 		{
@@ -41,12 +40,10 @@ public class ColorHandlers
 		}
 	}
 	
-	// the preview renderer needs to use the color from the itemstack as TE data is not available
-	public static int getHyperboxPreviewBlockColor(BlockState state, @Nullable BlockAndTintGetter level, @Nullable BlockPos pos, int tintIndex)
+	public static int getHyperboxPreviewBlockColor(int tintIndex)
 	{
 		if (tintIndex == BACKGROUND_TINT)
 		{
-			@SuppressWarnings("resource")
 			LocalPlayer player = Minecraft.getInstance().player;
 			if (player != null)
 			{
@@ -60,7 +57,7 @@ public class ColorHandlers
 		}
 	}
 	
-	public static int getApertureBlockColor(BlockState state, @Nullable BlockAndTintGetter level, @Nullable BlockPos pos, int tintIndex)
+	public static int getApertureBlockColor(@Nullable BlockAndTintGetter level, @Nullable BlockPos pos, int tintIndex)
 	{
 		if (tintIndex == BACKGROUND_TINT)
 		{

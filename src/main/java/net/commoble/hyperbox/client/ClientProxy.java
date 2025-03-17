@@ -23,12 +23,12 @@ import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
 import net.neoforged.neoforge.client.event.RegisterDimensionSpecialEffectsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.RenderHighlightEvent;
+import org.jetbrains.annotations.NotNull;
 
 public class ClientProxy
 {
-	public static ClientConfig clientConfig = null; // null until mod constructor
+	public static ClientConfig clientConfig = null;
 
-	// called from mod constructor
 	public static void doClientModInit(IEventBus modBus, IEventBus forgeBus)
 	{
 		clientConfig = ConfigHelper.register(Hyperbox.MODID, ModConfig.Type.CLIENT, ClientConfig::new);
@@ -40,72 +40,68 @@ public class ClientProxy
 		modBus.addListener(ClientProxy::onRegisterItemColors);
 		forgeBus.addListener(ClientProxy::onHighlightBlock);
 	}
-	
-	// do non-threadsafe stuff on main thread (client setup is off-thread)
-	private static void onRegisterScreens(RegisterMenuScreensEvent event)
+
+	private static void onRegisterScreens(@NotNull RegisterMenuScreensEvent event)
 	{
-		event.register(Hyperbox.INSTANCE.hyperboxMenuType.get(), HyperboxScreen::new);
+		event.register(Hyperbox.modInstance.hyperboxMenuType.get(), HyperboxScreen::new);
 	}
 	
-	private static void onRegisterRenderers(RegisterRenderers event)
+	private static void onRegisterRenderers(@NotNull RegisterRenderers event)
 	{
-		event.registerBlockEntityRenderer(Hyperbox.INSTANCE.hyperboxBlockEntityType.get(), HyperboxBlockEntityRenderer::new);
+		event.registerBlockEntityRenderer(Hyperbox.modInstance.hyperboxBlockEntityType.get(), HyperboxBlockEntityRenderer::new);
 	}
 	
-	private static void onRegisterDimensionSpecialEffects(RegisterDimensionSpecialEffectsEvent event)
+	private static void onRegisterDimensionSpecialEffects(@NotNull RegisterDimensionSpecialEffectsEvent event)
 	{
 		event.register(Hyperbox.HYPERBOX_ID, new HyperboxRenderInfo());
 	}
 	
-	private static void onRegisterBlockColors(RegisterColorHandlersEvent.Block event)
+	private static void onRegisterBlockColors(RegisterColorHandlersEvent.@NotNull Block event)
 	{
-		event.register(ColorHandlers::getHyperboxBlockColor, Hyperbox.INSTANCE.hyperboxBlock.get());
-		event.register(ColorHandlers::getHyperboxPreviewBlockColor, Hyperbox.INSTANCE.hyperboxPreviewBlock.get());
-		event.register(ColorHandlers::getApertureBlockColor, Hyperbox.INSTANCE.apertureBlock.get());
+		event.register((state, level, pos, tintIndex) -> ColorHandlers.getHyperboxBlockColor(level, pos, tintIndex), Hyperbox.modInstance.hyperboxBlock.get());
+		event.register((state, level, pos, tintIndex) -> ColorHandlers.getHyperboxPreviewBlockColor(tintIndex), Hyperbox.modInstance.hyperboxPreviewBlock.get());
+		event.register((state, level, pos, tintIndex) -> ColorHandlers.getApertureBlockColor(level, pos, tintIndex), Hyperbox.modInstance.apertureBlock.get());
 	}
 	
-	private static void onRegisterItemColors(RegisterColorHandlersEvent.Item event)
+	private static void onRegisterItemColors(RegisterColorHandlersEvent.@NotNull Item event)
 	{
-		event.register(ColorHandlers::getHyperboxItemColor, Hyperbox.INSTANCE.hyperboxItem.get());
+		event.register(ColorHandlers::getHyperboxItemColor, Hyperbox.modInstance.hyperboxItem.get());
 	}
 	
 	private static void onHighlightBlock(RenderHighlightEvent.Block event)
 	{
-		if (clientConfig.showPlacementPreview.get())
+		if (Boolean.TRUE.equals(clientConfig.showPlacementPreview.get()))
 		{
-			@SuppressWarnings("resource")
 			LocalPlayer player = Minecraft.getInstance().player;
-			Level level = player.level();
-			if (player != null && level != null)
+            assert player != null;
+            Level level = player.level();
+
+            InteractionHand hand = player.getUsedItemHand();
+			Item item = player.getItemInHand(hand).getItem();
+			if (item instanceof BlockItem blockItem)
 			{
-				InteractionHand hand = player.getUsedItemHand();
-				Item item = player.getItemInHand(hand == null ? InteractionHand.MAIN_HAND : hand).getItem();
-				if (item instanceof BlockItem blockItem)
+				Block block = blockItem.getBlock();
+				if (block instanceof HyperboxBlock)
 				{
-					Block block = blockItem.getBlock();
-					if (block instanceof HyperboxBlock)
+					BlockHitResult rayTrace = event.getTarget();
+					Direction directionAwayFromTargetedBlock = rayTrace.getDirection();
+					BlockPos placePos = rayTrace.getBlockPos().relative(directionAwayFromTargetedBlock);
+
+					BlockState existingState = level.getBlockState(placePos);
+					if (existingState.isAir() || existingState.canBeReplaced())
 					{
-						BlockHitResult rayTrace = event.getTarget();
-						Direction directionAwayFromTargetedBlock = rayTrace.getDirection();
-						BlockPos placePos = rayTrace.getBlockPos().relative(directionAwayFromTargetedBlock);
 
-						BlockState existingState = level.getBlockState(placePos);
-						if (existingState.isAir() || existingState.canBeReplaced())
-						{
-							// only render the preview if we know it would make sense for the block to be
-							// placed where we expect it to be
-							Vec3 hitVec = rayTrace.getLocation();
+						Vec3 hitVec = rayTrace.getLocation();
 
-							Direction attachmentDirection = directionAwayFromTargetedBlock.getOpposite();
-							Vec3 relativeHitVec = hitVec.subtract(Vec3.atLowerCornerOf(placePos));
+						Direction attachmentDirection = directionAwayFromTargetedBlock.getOpposite();
+						Vec3 relativeHitVec = hitVec.subtract(Vec3.atLowerCornerOf(placePos));
 
-							Direction outputDirection = RotationHelper.getOutputDirectionFromRelativeHitVec(relativeHitVec, attachmentDirection);
-							RotationHelper.getRotationIndexForDirection(attachmentDirection, outputDirection);
-							BlockState state = HyperboxBlock.getStateForPlacement(Hyperbox.INSTANCE.hyperboxPreviewBlock.get().defaultBlockState(), placePos, attachmentDirection, relativeHitVec);
+						Direction outputDirection = RotationHelper.getOutputDirectionFromRelativeHitVec(relativeHitVec, attachmentDirection);
+						RotationHelper.getRotationIndexForDirection(attachmentDirection, outputDirection);
+						BlockState state = HyperboxBlock.getStateForPlacement(Hyperbox.modInstance.hyperboxPreviewBlock.get().defaultBlockState(), attachmentDirection, relativeHitVec);
 
-							BlockPreviewRenderer.renderBlockPreview(placePos, state, level, event.getCamera().getPosition(), event.getPoseStack(), event.getMultiBufferSource());
+						BlockPreviewRenderer.renderBlockPreview(placePos, state, level, event.getCamera().getPosition(), event.getPoseStack(), event.getMultiBufferSource());
 
-						}
 					}
 				}
 			}
