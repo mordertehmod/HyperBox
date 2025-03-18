@@ -7,10 +7,12 @@ import javax.annotation.Nullable;
 import net.commoble.hyperbox.Hyperbox;
 import net.commoble.hyperbox.RotationHelper;
 import net.commoble.hyperbox.dimension.HyperboxChunkGenerator;
+import net.commoble.infiniverse.api.InfiniverseAPI;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
@@ -119,8 +121,32 @@ public class HyperboxBlock extends Block implements EntityBlock
 	}
 
 	@Override
-	public void onRemove(@NotNull BlockState state, @NotNull Level level, @NotNull BlockPos pos, @NotNull BlockState newState, boolean isMoving)
-	{
+	public void onRemove(@NotNull BlockState state, @NotNull Level level, @NotNull BlockPos pos, @NotNull BlockState newState, boolean isMoving) {
+		if (state.getBlock() == newState.getBlock()) {
+			super.onRemove(state, level, pos, newState, isMoving);
+			notifyNeighborsOfStrongSignalChange(state, level, pos);
+			return;
+		}
+
+		if (level instanceof ServerLevel serverLevel && level.getBlockEntity(pos) instanceof HyperboxBlockEntity hyperbox) {
+			MinecraftServer server = serverLevel.getServer();
+
+			hyperbox.getLevelKey().ifPresent(dimensionKey -> {
+				ServerLevel hyperboxDimension = server.getLevel(dimensionKey);
+
+				if (hyperboxDimension != null) {
+					int chunkRadius = 10;
+					for (int chunkX = 0; chunkX < chunkRadius; chunkX++) {
+						for (int chunkZ = 0; chunkZ < chunkRadius; chunkZ++) {
+							hyperboxDimension.setChunkForced(chunkX, chunkZ, false);
+						}
+					}
+
+					InfiniverseAPI.get().markDimensionForUnregistration(server, dimensionKey);
+				}
+			});
+		}
+
 		super.onRemove(state, level, pos, newState, isMoving);
 		notifyNeighborsOfStrongSignalChange(state, level, pos);
 	}
@@ -166,12 +192,10 @@ public class HyperboxBlock extends Block implements EntityBlock
 		super.neighborChanged(thisState, level, thisPos, fromBlock, fromPos, isMoving);
 	}
 
-	// called when a neighboring te's data changes
 	@Override
 	public void onNeighborChange(@NotNull BlockState thisState, @NotNull LevelReader level, @NotNull BlockPos thisPos, @NotNull BlockPos neighborPos)
 	{
 		this.onNeighborUpdated(thisState, level, thisPos, level.getBlockState(neighborPos), neighborPos);
-		// does nothing by default
 		super.onNeighborChange(thisState, level, thisPos, neighborPos);
 	}
 	
@@ -222,7 +246,6 @@ public class HyperboxBlock extends Block implements EntityBlock
 		else
 		{
 			int rotationIndex = thisState.getValue(ROTATION);
-			// get the direction that the original "north" face is now pointing
 			Direction newNorth = RotationHelper.getOutputDirection(downRotated, rotationIndex);
 			if (newNorth == worldSpaceFace)
 			{

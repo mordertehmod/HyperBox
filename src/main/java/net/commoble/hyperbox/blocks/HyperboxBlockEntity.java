@@ -1,7 +1,9 @@
 package net.commoble.hyperbox.blocks;
 
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 import javax.annotation.Nullable;
 
@@ -46,6 +48,8 @@ import org.jetbrains.annotations.NotNull;
 
 public class HyperboxBlockEntity extends BlockEntity implements Nameable
 {
+
+	private final Set<BlockPos> registeredCapabilityListeners = new HashSet<>();
 	public static final String WORLD_KEY = "world_key";
 	public static final String NAME = "CustomName"; // consistency with vanilla custom name data
 	public static final String WEAK_POWER = "weak_power";
@@ -200,6 +204,9 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 			{
 				BlockPos targetPos = hyperboxBlock.getPosAdjacentToAperture(this.getBlockState(), worldSpaceFace);
 				Direction rotatedDirection = hyperboxBlock.getOriginalFace(thisState, worldSpaceFace);
+
+				this.registeredCapabilityListeners.add(targetPos);
+
 				targetLevel.registerCapabilityListener(targetPos, () -> {
 					serverLevel.invalidateCapabilities(this.getBlockPos());
 					return false;
@@ -208,6 +215,20 @@ public class HyperboxBlockEntity extends BlockEntity implements Nameable
 			}
 		}
 		return null;
+	}
+
+	@Override
+	public void setRemoved() {
+		if (this.level instanceof ServerLevel serverLevel) {
+			ServerLevel targetLevel = this.getLevelIfKeySet(serverLevel.getServer());
+			if (targetLevel != null) {
+				for (BlockPos listenerPos : this.registeredCapabilityListeners) {
+					targetLevel.invalidateCapabilities(listenerPos);
+				}
+				this.registeredCapabilityListeners.clear();
+			}
+		}
+		super.setRemoved();
 	}
 	
 	public Optional<ApertureBlockEntity> getAperture(MinecraftServer server, Direction sideOfChildLevel)
