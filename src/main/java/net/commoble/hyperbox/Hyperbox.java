@@ -60,6 +60,8 @@ import net.neoforged.neoforge.capabilities.BlockCapability;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
@@ -146,6 +148,8 @@ public class Hyperbox
 		forgeBus.addListener(this::onUnregisterDimension);
 		forgeBus.addListener(EventPriority.HIGH, this::onPreLevelTick);
 		forgeBus.addListener(EventPriority.HIGH, this::onPostLevelTick);
+		forgeBus.addListener(this::onLevelLoad);
+		forgeBus.addListener(this::onLevelUnload);
 		
 		// subscribe client-build event handlers
 		if (FMLEnvironment.dist.isClient())
@@ -192,11 +196,8 @@ public class Hyperbox
 		ServerLevel level = event.getLevel();
 		MinecraftServer server = level.getServer();
 		DimensionType hyperboxDimensionType = HyperboxDimension.getDimensionType(server);
-		// if this is a hyperbox dimension
 		if (level.dimensionType() == hyperboxDimensionType)
 		{
-			// send players to their return points (we have specific points we want to return players to)
-			// iterate over a copy of the player list as we're modifying the original
 			for (ServerPlayer player : Lists.newArrayList(level.players()))
 			{
 				TeleportHelper.ejectPlayerFromDeadWorld(player);
@@ -229,15 +230,13 @@ public class Hyperbox
 			return;
 		}
 		MinecraftServer server = serverLevel.getServer();
-		
-		// cleanup unused hyperboxes
+
 		if (shouldUnloadDimension(server, serverLevel))
 		{
 			ResourceKey<Level> key = serverLevel.dimension();
 			InfiniverseAPI.get().markDimensionForUnregistration(server, key);
 		}
-		
-		// handle scheduled teleports
+
 		DelayedTeleportData.tick(serverLevel);
 	}
 	
@@ -266,6 +265,7 @@ public class Hyperbox
 		// if we can't check the chunk, we can't verify that the dimension should be unloaded
 		if (!parentLevel.hasChunk(parentPos.getX()>>4, parentPos.getZ()>>4))
 			return false;
+		}
 		
 		// if the te doesn't exist or isn't a hyperbox, return true and unload
 		BlockEntity te = parentLevel.getBlockEntity(parentPos);
@@ -306,5 +306,62 @@ public class Hyperbox
 	public static ResourceLocation id(String path)
 	{
 		return ResourceLocation.fromNamespaceAndPath(MODID, path);
+	}
+
+
+								// This should fix all "memory leaks" //
+
+
+	private boolean registeredShutdownHook = false;
+	private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger(Hyperbox.class);										// Memory leak fix //
+
+	private void onLevelLoad(LevelEvent.Load event) {
+		if (!(event.getLevel() instanceof ServerLevel serverLevel))
+			return;
+
+		if (HyperboxDimension.getDimensionType(serverLevel.getServer()) == serverLevel.dimensionType()) {
+			LOGGER.debug("Hyperbox dimension loaded: {}", serverLevel.dimension().location());
+
+			if (!registeredShutdownHook) {
+				NeoForge.EVENT_BUS.addListener(this::onServerStopping);
+				registeredShutdownHook = true;
+			}
+		}
+	}
+
+	private void onLevelUnload(LevelEvent.Unload event) {
+		if (!(event.getLevel() instanceof ServerLevel serverLevel))
+			return;
+
+		if (HyperboxDimension.getDimensionType(serverLevel.getServer()) == serverLevel.dimensionType()) {
+			LOGGER.debug("Hyperbox dimension unloaded: {}", serverLevel.dimension().location());
+
+			int chunkRadius = 2;
+			for (int chunkX = 0; chunkX < chunkRadius; chunkX++) {
+				for (int chunkZ = 0; chunkZ < chunkRadius; chunkZ++) {
+					if (serverLevel.getForcedChunks().contains(ChunkPos.asLong(chunkX, chunkZ))) {
+						serverLevel.setChunkForced(chunkX, chunkZ, false);
+					}
+				}
+			}
+		}
+	}
+
+	private void onServerStopping(ServerStoppingEvent event) {
+		MinecraftServer server = event.getServer();
+		LOGGER.debug("Server stopping, cleaning up all hyperbox dimensions");
+
+		for (ServerLevel level : server.getAllLevels()) {
+			if (HyperboxDimension.getDimensionType(server) == level.dimensionType()) {
+				int chunkRadius = 2;
+				for (int chunkX = 0; chunkX < chunkRadius; chunkX++) {
+					for (int chunkZ = 0; chunkZ < chunkRadius; chunkZ++) {
+						if (level.getForcedChunks().contains(ChunkPos.asLong(chunkX, chunkZ))) {
+							level.setChunkForced(chunkX, chunkZ, false);
+						}
+					}
+				}
+			}
+		}
 	}
 }
